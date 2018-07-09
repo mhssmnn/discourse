@@ -1,3 +1,10 @@
+GIT
+  remote: git://github.com/nlalonde/ruby-bbcode-to-md.git
+  revision: 3b9aaf2b634704a415788c94f7dee93a81f616b5
+  specs:
+    ruby-bbcode-to-md (0.0.14)
+      activesupport
+
 GEM
   remote: https://rubygems.org/
   specs:
@@ -130,7 +137,7 @@ GEM
     guess_html_encoding (0.0.11)
     hashdiff (0.3.7)
     hashie (3.5.7)
-    highline (1.7.10)
+    highline (2.0.0)
     hiredis (0.6.1)
     hkdf (0.3.0)
     htmlentities (4.3.4)
@@ -189,6 +196,7 @@ GEM
     multi_xml (0.6.0)
     multipart-post (2.0.0)
     mustache (1.0.5)
+    mysql2 (0.5.1)
     nokogiri (1.8.3)
       mini_portile2 (~> 2.3.0)
     nokogumbo (1.5.0)
@@ -238,6 +246,7 @@ GEM
     openid-redis-store (0.0.2)
       redis
       ruby-openid
+    ox (2.9.3)
     parallel (1.12.1)
     parser (2.5.1.0)
       ast (~> 2.4.0)
@@ -291,11 +300,14 @@ GEM
       ffi (>= 1.0.6)
       msgpack (>= 0.4.3)
       trollop (>= 1.16.2)
+    redcarpet (3.4.0)
     redis (4.0.1)
     redis-namespace (1.6.0)
       redis (>= 3.0.4)
     request_store (1.4.1)
       rack (>= 1.4)
+    reverse_markdown (1.1.0)
+      nokogiri
     rinku (2.0.4)
     rotp (3.3.1)
     rqrcode (0.10.1)
@@ -430,6 +442,7 @@ DEPENDENCIES
   ember-source (= 2.13.3)
   excon
   execjs
+  exifr (= 1.2.5)
   fabrication
   fakeweb (~> 1.3.0)
   fast_blank
@@ -461,6 +474,7 @@ DEPENDENCIES
   mock_redis
   multi_json
   mustache
+  mysql2
   nokogiri
   oj
   omniauth
@@ -473,6 +487,7 @@ DEPENDENCIES
   omniauth-twitter
   onebox (= 1.8.52)
   openid-redis-store
+  ox
   pg
   pry-nav
   pry-rails
@@ -486,8 +501,10 @@ DEPENDENCIES
   rb-fsevent
   rb-inotify (~> 0.9)
   rbtrace
+  redcarpet
   redis
   redis-namespace
+  reverse_markdown
   rinku
   rotp
   rqrcode
@@ -496,6 +513,7 @@ DEPENDENCIES
   rspec-rails
   rtlit
   rubocop
+  ruby-bbcode-to-md!
   ruby-prof
   ruby-readability
   sanitize

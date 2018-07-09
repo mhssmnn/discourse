@@ -25,13 +25,13 @@ class ImportScripts::Lithium < ImportScripts::Base
   BATCH_SIZE = 1000
 
   # CHANGE THESE BEFORE RUNNING THE IMPORTER
-  DATABASE = "wd"
-  PASSWORD = "password"
-  AVATAR_DIR = '/tmp/avatars'
-  ATTACHMENT_DIR = '/tmp/attachments'
-  UPLOAD_DIR = '/tmp/uploads'
+  DATABASE = "gartner_01"
+  PASSWORD = ""
+  AVATAR_DIR = '/shared/import/data/avatars_01'
+  ATTACHMENT_DIR = '/shared/import/data/attachments_01'
+  UPLOAD_DIR = '/shared/import/data/uploads_01'
 
-  OLD_DOMAIN = 'community.wd.com'
+  OLD_DOMAIN = 'community.gartner.com'
 
   TEMP = ""
 
@@ -40,9 +40,10 @@ class ImportScripts::Lithium < ImportScripts::Base
     { name: "user_field_1", profile: "jobtitle" },
     { name: "user_field_2", profile: "company" },
     { name: "user_field_3", profile: "industry" },
+    { name: "saml_showcompany", profile: "showcompany" },
   ]
 
-  LITHIUM_PROFILE_FIELDS = "'profile.jobtitle', 'profile.company', 'profile.industry', 'profile.location'"
+  LITHIUM_PROFILE_FIELDS = "'profile.jobtitle', 'profile.company', 'profile.industry', 'profile.location', 'profile.showcompany'"
 
   USERNAME_MAPPINGS = {
     "admins": "admin_user"
@@ -65,7 +66,7 @@ class ImportScripts::Lithium < ImportScripts::Base
 
   def execute
 
-    @max_start_id = Post.maximum(:id)
+    @max_start_id = PostCustomField.where(name: "import_post_process", value: "t").maximum(:post_id) || Post.maximum(:id)
 
     import_groups
     import_categories
@@ -78,8 +79,37 @@ class ImportScripts::Lithium < ImportScripts::Base
     import_pms
     close_topics
     create_permalinks
+    import_user_groups
 
     post_process_posts
+  end
+
+  def import_user_groups
+    puts "", "importing user groups..."
+
+    count = 0
+    total = User.count
+    User.find_each do |user|
+      import_id = user.custom_fields["import_id"]
+      next if import_id.blank?
+
+      result = mysql_query <<-SQL
+          SELECT DISTINCT r.name 
+            FROM user_role u 
+            LEFT JOIN roles r ON u.role_id = r.id 
+          WHERE u.user_id = #{import_id}
+      SQL
+
+      result.each do |group|
+        name = group["name"]
+        gf = GroupCustomField.find_by(name: "import_id", value: name)
+        raise "Group '#{name}' not found" if gf.blank? || gf.group.blank?
+
+        gf.group.add user
+      end
+
+      print_status(count += 1, total)
+    end
   end
 
   def import_groups
@@ -193,6 +223,7 @@ class ImportScripts::Lithium < ImportScripts::Base
       visits = mysql_query <<-SQL
           SELECT user_id, login_time
             FROM user_log
+           WHERE user_id != 4
         ORDER BY user_id
            LIMIT #{BATCH_SIZE}
           OFFSET #{offset}
@@ -200,11 +231,11 @@ class ImportScripts::Lithium < ImportScripts::Base
 
       break if visits.size < 1
 
-      user_ids = visits.uniq { |v| v["user_id"] }
+      user_ids = visits.map { |v| v["user_id"] }.uniq
 
       user_ids.each do |user_id|
         user = UserCustomField.find_by(name: "import_id", value: user_id).try(:user)
-        raise "User not found for id #{user_id}" if user.blank?
+        next if user.blank?
 
         user_visits = visits.select { |v| v["user_id"] == user_id }
         user_visits.each do |v|
@@ -297,6 +328,15 @@ class ImportScripts::Lithium < ImportScripts::Base
     file.unlink rescue nil
   end
 
+  def import_category_slugs
+    Category.find_each do |category|
+      node_id = category.custom_fields["node_id"]
+      next if node_id.blank?
+
+
+    end
+  end
+
   def import_categories
     puts "", "importing top level categories..."
 
@@ -324,6 +364,7 @@ class ImportScripts::Lithium < ImportScripts::Base
         id: category["node_id"],
         name:  category["name"],
         position: category["position"],
+        custom_fields: { import_display_id: category["display_id"] },
         post_create_action: lambda do |record|
           after_category_create(record, category)
         end
@@ -339,6 +380,7 @@ class ImportScripts::Lithium < ImportScripts::Base
         id: category["node_id"],
         name: category["name"],
         position: category["position"],
+        custom_fields: { import_display_id: category["display_id"] },
         parent_category_id: category_id_from_imported_category_id(category["parent_node_id"]),
         post_create_action: lambda do |record|
           after_category_create(record, category)
@@ -426,6 +468,9 @@ class ImportScripts::Lithium < ImportScripts::Base
                 tag_names = result.first["tags"].split(",")
                 DiscourseTagging.tag_topic_by_names(post.topic, staff_guardian, tag_names)
               end
+
+              post.custom_fields["excerpt"] = post.excerpt(post.cooked.length, strip_links: true, strip_images: true, text_entities: true)
+              post.save_custom_fields
             end
           }
         else
@@ -481,7 +526,11 @@ class ImportScripts::Lithium < ImportScripts::Base
             created_at: unix_time(post["post_date"]),
             deleted_at: deleted_at,
             custom_fields: { import_unique_id: post["unique_id"] },
-            import_mode: true
+            import_mode: true,
+            post_create_action: proc do |post|
+              post.custom_fields["excerpt"] = post.excerpt(post.cooked.length, strip_links: true, strip_images: true, text_entities: true)
+              post.save_custom_fields
+            end
           }
 
           if parent = topic_lookup_from_imported_post_id("#{post["node_id"]} #{post["root_id"]} #{post["parent_id"]}")
@@ -903,12 +952,12 @@ SQL
   end
 
   def postprocess_post_raw(raw, user_id)
-    matches = raw.match(/<messagetemplate.*<\/messagetemplate>/m) || []
-    matches.each do |match|
-      hash = Hash.from_xml(match)
+    match = raw.match(/<messagetemplate.*<\/messagetemplate>/m)
+    if match.present?
+      hash = Hash.from_xml(match[0])
       template = hash["messagetemplate"]["zone"]["item"]
       content = (template[0] || template)["content"] || ""
-      raw.sub!(match, content)
+      raw.sub!(match[0], content)
     end
 
     doc = Nokogiri::HTML.fragment(raw)

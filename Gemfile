@@ -189,3 +189,9 @@ if ENV["IMPORT"] == "1"
 end
 
 gem 'webpush', require: false
+gem 'exifr', '1.2.5'
+gem 'mysql2'
+gem 'redcarpet'
+gem 'reverse_markdown'
+gem 'ruby-bbcode-to-md', :github => 'nlalonde/ruby-bbcode-to-md'
+gem 'ox'
